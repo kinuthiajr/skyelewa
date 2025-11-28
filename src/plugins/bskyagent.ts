@@ -23,10 +23,12 @@ export default fp(async (fastify) => {
 
         await agent.login({identifier:BLUESKY_IDENTIFIER,password:BLUESKY_PASSWORD});
         fastify.decorate('bsky',agent);
-        fastify.log.info('🔵 Bluesky agent initialized and logged in.');
+        fastify.log.info('Bluesky agent initialized and logged in.');
     } catch (err){
-        fastify.log.error(err,'🔴 Failed to initialize Bluesky agent');
+        fastify.log.error(err,'Failed to initialize Bluesky agent');
         throw err;
     }
+}, {
+    name: 'bluesky-agent'
     
 });

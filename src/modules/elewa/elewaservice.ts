@@ -10,16 +10,22 @@ interface ReplyRef{
     parent: { uri: string, cid: string }
 }
 
-interface MentionEvent extends BaseEventMention{
-     // The AT URI of the post the bot is directly replying to (the mention post)
+export interface MentionEvent extends BaseEventMention {
+    authorDid: string;
+
+    // replying post
     uri: string;
-    // The CID of the post the bot is directly replying to (the mention post)
     cid: string;
-    // The AT URI of the root post of the thread
+
+    // thread root
     rootUri: string;
-    // The CID of the root post of the thread
-    rootCid: string;  
+    rootCid: string;
+
+    // cleaned text
+    cleanQuery: string;
 }
+
+
 
 export class ElewaService{
     // console logger

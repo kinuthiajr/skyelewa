@@ -24,9 +24,11 @@ export default fp(async (fastify) => {
             systemInstruction: "You are SkyExplain, a concise bot that summarizes user posts on the Bluesky social network within 280 characters."
         });
         fastify.decorate('gemini', model);
-        fastify.log.info('🔵 Gemini API initialized.');
+        fastify.log.info('Gemini API initialized.');
     } catch (err) {
-        fastify.log.error(err, '🔴 Failed to initialize Gemini API');
+        fastify.log.error(err, 'Failed to initialize Gemini API');
         throw err;
     }
+}, {
+    name: 'gemini-agent'  
 });
