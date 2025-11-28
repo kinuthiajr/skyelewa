@@ -1,15 +1,9 @@
-// src/app.ts (Minimal setup to test the Gemini Plugin)
-// import dotenv from 'dotenv';
-// dotenv.config();
+// This is the entry of the application and also registreation of plugins
 
 import Fastify from 'fastify';
-// import dotenv from 'dotenv';
-import geminiPlugin from './plugins/gemini.js'; // Note the .js for ES Modules
-import bskyagentPlugin from './plugins/bskyagent.js'; // Note the .js for ES Modules
+import geminiPlugin from './plugins/gemini.js'; 
+import bskyagentPlugin from './plugins/bskyagent.js';
 import { env } from './config/env.js';
-
-// Load environment variables at the very beginning
-// dotenv.config();
 
 const app = Fastify({ logger: true });
 
@@ -19,7 +13,6 @@ const start = async () => {
     await app.register(geminiPlugin);
     await app.register(bskyagentPlugin);
 
-    // Add a status route to check if plugins are loaded
     app.get('/status', async (request, reply) => {
       const status = {
         gemini: app.gemini ? '✅ Ready' : '❌ Not Loaded',

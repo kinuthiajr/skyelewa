@@ -1,3 +1,7 @@
+
+// Plugin: This plugin initializes the Gemini API client and decorates the Fastify instance with it.
+// Allows other parts of the application to access the Gemini API via fastify.gemini.
+
 import fp from 'fastify-plugin';
 import { GoogleGenerativeAI, GenerativeModel } from '@google/generative-ai';
 import { env } from '../config/env.js';

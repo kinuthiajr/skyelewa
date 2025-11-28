@@ -1,3 +1,7 @@
+
+// Plugin: This plugin initializes the Bluesky AtpAgent and decorates the Fastify instance with it.
+// Allows other parts of the application to access the Bluesky API via fastify.bsky.
+
 import fp from 'fastify-plugin';
 import {AtpAgent} from '@atproto/api';
 
