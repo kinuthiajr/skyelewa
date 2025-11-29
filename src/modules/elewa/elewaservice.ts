@@ -20,11 +20,14 @@ export interface MentionEvent extends BaseEventMention {
     // thread root
     rootUri: string;
     rootCid: string;
-
+    postUri: string;
+    postCid: string;
     // cleaned text
     cleanQuery: string;
 }
 
+// Char constant 
+const MAX_POST_LENGTH = 300;
 
 
 export class ElewaService{
@@ -45,6 +48,46 @@ export class ElewaService{
     constructor(bsky: AtpAgent, gemini: GenerativeModel){
         this.bsky = bsky;
         this.gemini = gemini;
+    }
+
+    private splitTextIntoPosts(text: string): string []{
+        const chunks: string[] = [];
+        let remainingText = text;
+
+        while(remainingText.length > 0){
+            const maxContentLength = MAX_POST_LENGTH - 6;
+
+            let chunk = remainingText;
+            let splitPoint = remainingText.length;
+
+            if(remainingText.length > maxContentLength){
+                // If too long trunck at it las last space
+                chunk = remainingText.substring(0, maxContentLength);
+                splitPoint = maxContentLength;
+
+                
+                // Try to find the last space before the limit to avoid splitting words
+                const idealSplitPoint = chunk.lastIndexOf(' ');
+
+                // Ensure the split point is a useful distance from the end (e.g., > 10 chars back)
+                if (idealSplitPoint > 15) { 
+                    chunk = remainingText.substring(0, idealSplitPoint);
+                    splitPoint = idealSplitPoint;
+                }
+            }
+            chunks.push(chunk.trim());
+            remainingText = remainingText.substring(splitPoint).trim();
+        }
+
+        // Pagination
+        const totalParts = chunks.length;
+        return chunks.map((chunk, index) => {
+            // Only add pagination if there's more than one post
+            if (totalParts > 1) {
+                 return `${chunk} (${index + 1}/${totalParts})`;
+            }
+            return chunk;
+        });
     }
 
     // Helper function to execute post Bsky API
@@ -100,11 +143,15 @@ export class ElewaService{
 
         // Processing the initial Msg
 
-        let processingPostRef: {uri:string, cid:string}
+        let processingPostRef: {uri:string, cid:string} | undefined;
+        let currentParentRef: {uri:string, cid:string} = originalPostRef;
+
         try{
             this.logger.log("Posting initial processing message");
             processingPostRef = await this.postRecord(ElewaService.PROCESSING_TEXT, initialReplyRef);
             this.logger.log(`'Processing' post successfully created: ${processingPostRef.uri}`);
+             // The next reply should go to this processing post
+            currentParentRef = processingPostRef;
 
         } catch(err){
             this.logger.error("Failed to post initial processing message");
@@ -130,23 +177,31 @@ export class ElewaService{
         try {
             this.logger.log(`Posting final summary reply.`);
             
-            // The Final Summary replies to the 'Processing' post.
-            const finalReplyRef: ReplyRef = {
-                root: threadPostRef, 
-                parent: processingPostRef, // New parent is the 'Processing' post
-            };
+                 // 1. Split the summary text into postable chunks
+            const baseContent = `@${authorDid} Here is your explanation:\n\n${summaryText}`;
+            const postableChunks = this.splitTextIntoPosts(baseContent);
+            this.logger.log(`Splitting response into ${postableChunks.length} chunks.`);
 
-            const finalContent = `@${authorDid} Here is your explanation:\n\n${summaryText}`;
-            
-            await this.postRecord(
-                finalContent,
-                finalReplyRef,
-            );
+            // 2. Post the thread
+            for (const chunk of postableChunks) {
+                // Ensure the root remains the original thread root
+                const replyRef: ReplyRef = {
+                    root: threadPostRef, 
+                    parent: currentParentRef, 
+                };
+
+                const response = await this.postRecord(chunk, replyRef);
+                
+                // Update the parent for the next post in the thread
+                currentParentRef = { uri: response.uri, cid: response.cid };
+            };
 
             this.logger.log(`Final summary successfully posted. Proceeding to delete 'Processing' post.`);
 
             // --- 5. Clean up: Delete the 'Processing' post ---
-            await this.deleteRecord(processingPostRef.uri);
+            if(processingPostRef){
+                await this.deleteRecord(processingPostRef.uri);
+            }
             
             } catch (error) {
                 this.logger.error(`Failed to post final reply or delete 'Processing' post.`, error);

@@ -7,6 +7,7 @@ import { Jetstream } from '@skyware/jetstream';
 import type { CommitEvent, CollectionOrWildcard } from '@skyware/jetstream'; 
 import { ElewaService } from '../modules/elewa/elewaservice.js';
 import type {MentionEvent } from '../modules/elewa/elewaservice.js';
+import { AppBskyFeedPost } from '@atproto/api';
 
 // Configs
 const BOT_HANDLE = '@skyelewa.bsky.social';
@@ -17,7 +18,7 @@ export const blueskyListenerPlugin: FastifyPluginAsync = fp(async (fastify, opts
     
     // DI and service instanciation
     const elewaService = new ElewaService(fastify.bsky, fastify.gemini);
-    fastify.log.info('ExplainService instantiated with necessary agents.');
+    fastify.log.info('ElewaService instantiated with necessary agents.');
 
     // JetStream client initialization
     const jetStream = new Jetstream<CollectionOrWildcard>({
@@ -26,6 +27,42 @@ export const blueskyListenerPlugin: FastifyPluginAsync = fp(async (fastify, opts
     });
 
     fastify.log.info(`JetStream client initialized for ${BOT_HANDLE}.`);
+
+    const getContextualizedQuery = async (record:AppBskyFeedPost.Record, mentionQuery:string):Promise<string>=>{
+        if( !record.reply || !record.reply.parent?.uri ){
+            return mentionQuery;
+        }
+
+        const parentUri = record.reply.parent.uri;
+
+        try{
+            fastify.log.info(`Fetching parent post context for URI: ${parentUri}`);
+
+            // bsky agent to fetch the thread
+            const threadResponse = await fastify.bsky.app.bsky.feed.getPostThread({
+                uri: parentUri,
+                depth: 0,
+            });
+            const parentPost = threadResponse.data.thread;
+
+            // Check if the post was successfully retrieved and is a standard post
+            if (parentPost && 'post' in parentPost && parentPost.post.record?.text) {
+
+                const parentText = parentPost.post.record.text;
+                
+                // Combine the parent text with the mention query, clearly marking the source
+                const contextualizedQuery = `Context from Parent Post: "${parentText}"\nUser Query/Action: "${mentionQuery}"`;
+                fastify.log.info(`Contextualized Query created: ${contextualizedQuery}`);
+                return contextualizedQuery;
+            }
+             } catch (err) {
+                fastify.log.error(`${err}: Error retrieving parent post for context`);
+                return mentionQuery;
+            }
+
+            return mentionQuery;
+        
+    }
 
     // Setup the event listener for new posts
     // Listen for new commit events
@@ -46,27 +83,38 @@ export const blueskyListenerPlugin: FastifyPluginAsync = fp(async (fastify, opts
             // data adaptation--Mapping to the MentionEvent
             
             // remove bothandle
-            const cleanQuery = fulltext.replace(BOT_HANDLE,'').trim();
+            const mentionQuery = fulltext.replace(BOT_HANDLE,'').trim();
 
             // If the mention is in a thread, the root and parent are in the reply property.
             // If it's a new post, the root and parent are the post itself.
-             const postUri = `at://${event.did}/app.bsky.feed.post/${event.commit.rkey}`;
+            const cleanQuery = await getContextualizedQuery(record, mentionQuery);
+            
+            // Determine the Post's own URI and CID (the replying post)
+            const postUri = `at://${event.did}/app.bsky.feed.post/${event.commit.rkey}`;
+            const postCid = event.commit.cid;
 
-            // The root may or may not exist
-            const root = record?.reply?.root ?? {
-                uri: postUri,
-                cid: event.commit.cid
-            };
+            // Determine the Thread Root URI and CID
+            let rootUri = postUri;
+            let rootCid = postCid;
+
+             // If it's a reply, the root is defined in the record
+            if (record.reply && record.reply.root) {
+                rootUri = record.reply.root.uri;
+                rootCid = record.reply.root.cid;
+            }
 
             const mentionPost: MentionEvent = {
-                uri: postUri,
-                cid: event.commit.cid,
-                rootUri: root.uri,
-                rootCid: root.cid,
                 authorDid: event.did,
+                // Replying post properties
+                uri: postUri, 
+                cid: postCid,
+                // Thread root properties
+                rootUri: rootUri,
+                rootCid: rootCid,
+                postUri: postUri, // <-- ADDED to fix the compile error
+                postCid: postCid,
+                // The query
                 cleanQuery: cleanQuery,
-                postCid: event.commit.cid,
-                postUri: postUri
             };
 
             // Hand off the clean, typed data to the Service Logic
