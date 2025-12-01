@@ -11,8 +11,8 @@ const app = Fastify({ logger: true });
 const start = async () => {
   try {
     // Register your plugins
-    await app.register(geminiPlugin);        // now gemini-agent is registered
-    await app.register(bskyagentPlugin); 
+    await app.register(geminiPlugin);
+    await app.register(bskyagentPlugin, { name: 'bluesky-agent' }); 
 
      // --- 2. Register Listener (Consumes Dependencies) ---
       // This is the critical step to start the Jetstream connection.
@@ -25,7 +25,7 @@ const start = async () => {
       };
 
       // If any plugin failed, return a server error status code
-      const isOk = Object.values(status).every(s => s.startsWith('✅'));
+      const isOk = status.gemini === 'Ready' && status.bsky === 'Logged In';
 
       reply.code(isOk ? 200 : 500).send(status);
     });
