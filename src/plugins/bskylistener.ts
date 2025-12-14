@@ -10,7 +10,7 @@ import type {MentionEvent } from '../modules/elewa/elewaservice.js';
 import { AppBskyFeedPost } from '@atproto/api';
 
 // Configs
-const BOT_HANDLE = '@skyelewa.bsky.social';
+const BOT_HANDLE = '@skyeleza.bsky.social';
 const JETSTREAM_ENDPOINT = 'wss://jetstream1.us-west.bsky.network/subscribe';
 
 export const blueskyListenerPlugin: FastifyPluginAsync = fp(async (fastify, opts) => {
